@@ -7,16 +7,22 @@ library(throne)
 
 ## Load and prepare data ------------------------------------------------------
 
+# load data
+load("data/flights_data_validation_corr.RData")
+load("data/otms_data_validation.RData")
+
 # get list of flights
-flights_list <- flights_data_corr %>%
+flights_list <- flights_data_validation_corr %>%
   dplyr::select(year, doy, mod_start, mod_end) %>% unique()
 
+# select OTMs to use
+otms_data_validation <- otms_data_validation %>% filter(otm_id != "L39")
+
 # generate OTM splines with different knot_p
-a <- gen_otm_splines(otm_data = otms_data, knot_p = 1/2) %>% mutate(knot_p = 1/2)
-b <- gen_otm_splines(otm_data = otms_data, knot_p = 1/7.5) %>% mutate(knot_p = 1/7.5)
-c <- gen_otm_splines(otm_data = otms_data, knot_p = 1/15) %>% mutate(knot_p = 1/15)
-d <- gen_otm_splines(otm_data = otms_data, knot_p = 1/60) %>% mutate(knot_p = 1/60)
-m_otm_splines <- bind_rows(a, b, c, d)
+a <- gen_otm_splines(otm_data = otms_data_validation, knot_p = 1) %>% mutate(knot_p = 1)
+b <- gen_otm_splines(otm_data = otms_data_validation, knot_p = 0.5) %>% mutate(knot_p = 0.5)
+c <- gen_otm_splines(otm_data = otms_data_validation, knot_p = 0.25) %>% mutate(knot_p = 0.25)
+m_otm_splines <- bind_rows(a, b, c)
 
 # round latitude and longitude columns to 5 digits
 m_otm_splines$longitude <- as.numeric(format(m_otm_splines$longitude, nsmall = 5))
@@ -26,34 +32,33 @@ m_otm_splines$latitude <- as.numeric(format(m_otm_splines$latitude, nsmall = 5))
 m_otm_splines$tile_id <- m_otm_splines$longitude * m_otm_splines$latitude
 
 # filter tile on flight data where OTMs are present
-tile_flights_data_corr <- flights_data_corr %>%
+tile_flights_data_validation_corr <- flights_data_validation_corr %>%
   mutate(tile_id = latitude * longitude) %>%
   filter(tile_id %in% unique(m_otm_splines$tile_id))
 
 ## Prepare parameters to test -------------------------------------------------
 
+# define number of flights
+total_n_flights <- nrow(flights_list)
+
 # number of flights to use
-n_flights <- c(3,6,9)
+n_flights <- c(total_n_flights*0.3,total_n_flights*0.5,total_n_flights)
+
+# define number of OTMs
+total_n_otms <- length(unique(otms_data_validation$otm_id))
 
 # number of OTMs to use
-n_otms <- c(8,16,24,33)
+n_otms <- c(round(total_n_otms*0.25),round(total_n_otms*0.5),total_n_otms)
 
 # knots / h to be considered
-knot_ps <- c(1/60, 1/15, 1/7.5, 1/2)
+knot_ps <- c(1, 0.5, 0.25)
 
 # get combinations grid
 combs <- expand.grid(n_flights, n_otms, knot_ps)
 colnames(combs) <- c("n_flights", "n_otms", "knot_p")
 
 # get replicates
-combs <- do.call("rbind", replicate(5, combs, simplify = FALSE))
-
-# add all flights all otms combinations which only vary in knots / h
-# no replicates are needed as all flights and all OTMs are being sampled
-all_flights <- data.frame(n_flights = rep(34, 4), n_otms = rep(33, 4), knot_p = knot_ps)
-
-# bind combinations to all flights iterations
-combs <- rbind(combs, all_flights)
+combs <- do.call("rbind", replicate(10, combs, simplify = FALSE))
 
 # add iterations column
 combs$it <- seq(1, nrow(combs), by = 1)
@@ -62,43 +67,49 @@ combs$it <- seq(1, nrow(combs), by = 1)
 
 # generate holder object
 all_matches <- tibble(latitude = c(), longitude = c(), tile_id = c(),
-                      otm_id = c(), error = c(), n_flights = c(), n_otms = c(), knot_p = c())
+                      otm_id = c(), error = c(), n_flights = c(),
+                      n_otms = c(), knot_p = c())
 
 # running matching loop
 for(i in 1:nrow(combs)){
 
-  # load package
-  #devtools::load_all()
-
   # select subset of flights of interest
-  if(combs$n_flights[i] < 34){
+  if(combs$n_flights[i] < total_n_flights){
 
-    fmorn <- flights_list %>% filter(mod_start < 660) %>% sample_n(combs$n_flights[i]/3)
-    fmid <- flights_list %>% filter(mod_start < 660) %>% filter(mod_start < 1000) %>% sample_n(combs$n_flights[i]/3)
-    faft <- flights_list %>% filter(mod_start > 1000)%>% sample_n(combs$n_flights[i]/3)
+    fmorn <- flights_list %>% filter(mod_start < 660) %>%
+      sample_n(combs$n_flights[i]/3)
+    fmid <- flights_list %>% filter(mod_start > 660) %>%
+      filter(mod_start < 1000) %>% sample_n(combs$n_flights[i]/3)
+    faft <- flights_list %>% filter(mod_start > 1000)%>%
+      sample_n(combs$n_flights[i]/3)
     flights_int <- rbind(fmorn, fmid, faft)
-    sub_flights <- tile_flights_data_corr %>% filter(mod_start %in% flights_int$mod_start)
+    sub_flights <- tile_flights_data_validation_corr %>%
+      filter(mod_start %in% flights_int$mod_start)
 
   }else{
 
     flights_int <- flights_list
-    sub_flights <- tile_flights_data_corr
+    sub_flights <- tile_flights_data_validation_corr
 
   }
 
   # select subset of OTMs
   sub_otm <- sample(unique(m_otm_splines$otm_id), combs$n_otms[i])
 
-  # select subset of OTMs of interest, doy < 239 as no flights took place then.
+  # select subset of OTMs of interest
   sub_otm_splines <- m_otm_splines %>% filter(knot_p == combs$knot_p[i]) %>%
-    filter(otm_id %in% sub_otm) %>% filter(doy < 239)
+    filter(otm_id %in% sub_otm)
 
   # subset flights times
-  all_otms_times <- expand.grid(otm_id = sub_otm, year = unique(flights_int$year),doy = unique(flights_int$doy),
-                                mod_start = unique(flights_int$mod_start), mod_end = unique(flights_int$mod_end))
+  all_otms_times <- expand.grid(otm_id = sub_otm,
+                                year = unique(flights_int$year),
+                                doy = unique(flights_int$doy),
+                                mod_start = unique(flights_int$mod_start),
+                                mod_end = unique(flights_int$mod_end))
 
   # merge all times combinations with all combinations to get each OTM at all times
-  sub_otm_preds <- merge(all_otms_times, flights_int, by = c("year", "doy", "mod_start", "mod_end"))
+  sub_otm_preds <- merge(all_otms_times, flights_int,
+                         by = c("year", "doy", "mod_start", "mod_end"))
 
   # add column for predicted operative temperatured
   sub_otm_preds$pred_op_temp <- rep(NA, nrow(sub_otm_preds))
@@ -111,11 +122,14 @@ for(i in 1:nrow(combs)){
   for(j in 1:nrow(sub_otm_preds)){
 
     # isolate the spline model for that otm_id, that year, that doy
-    otm_specific_spline <- sub_otm_splines %>% filter(otm_id == sub_otm_preds$otm_id[j]) %>%
-      filter(year == sub_otm_preds$year[j]) %>% filter(doy == sub_otm_preds$doy[j])
+    otm_specific_spline <- sub_otm_splines %>%
+      filter(otm_id == sub_otm_preds$otm_id[j]) %>%
+      filter(year == sub_otm_preds$year[j]) %>%
+      filter(doy == sub_otm_preds$doy[j])
 
     # predict temperatures for the period between mod_start and mod_end
-    prediction <- predict(otm_specific_spline$spline[[1]],c(sub_otm_preds$mod_start[j]:sub_otm_preds$mod_end[j]))$y
+    prediction <- predict(otm_specific_spline$spline[[1]],
+                          c(sub_otm_preds$mod_start[j]:sub_otm_preds$mod_end[j]))$y
 
     # get average predicted temperature
     sub_otm_preds$pred_op_temp[j] <- mean(prediction)
@@ -138,17 +152,19 @@ for(i in 1:nrow(combs)){
     tile_dat <- sub_flights %>% filter(tile_id == sub_matches$tile_id[j])
 
     # select columns of interest from tile_dat
-    tile_dat <- tile_dat %>% dplyr::select(tile_id, year, doy, mod_start, mod_end, op_temp)
+    tile_dat <- tile_dat %>%
+      dplyr::select(tile_id, year, doy, mod_start, mod_end, op_temp)
 
     # merge tile data with otm_preds
-    tile_dat <- merge(tile_dat, sub_otm_preds, by = c("year", "doy", "mod_start", "mod_end"), all = TRUE)
+    tile_dat <- merge(tile_dat, sub_otm_preds,
+                      by = c("year", "doy", "mod_start", "mod_end"), all = TRUE)
 
     # find OTM match
     otm_match <- tile_dat %>% group_by(otm_id) %>%
       summarise(error = mean(abs(pred_op_temp - op_temp), na.rm = T)) %>%
       filter(error == min(error, na.rm = T))
 
-    # add info to holder matches dataset
+    # add info to holder matches data set
     sub_matches$otm_id[j] <- as.character(otm_match$otm_id[1])
     sub_matches$error[j] <- otm_match$error[1]
 
@@ -179,11 +195,18 @@ val_data <- merge(all_matches, merge_otms, by = c("latitude", "longitude"))
 # repeat each match 100 times
 val_data <- do.call("rbind", replicate(100, val_data, simplify = FALSE))
 
-# add date column
-val_data$doy <- sample(unique(otms_splines$doy)[2:3], nrow(val_data), replace = TRUE)
+# get list of unique doy
+unique_doy <- unique(otms_data_validation$doy)
+
+# remove problematic days
+unique_doy <- ifelse(unique_doy %in% c(105,162,163,176:180), NA, unique_doy)
+unique_doy <- unique_doy[!is.na(unique_doy)]
+
+# add date column (last 4 days removed as they were deploy or redeploy days)
+val_data$doy <- sample(unique_doy, nrow(val_data), replace = TRUE)
 
 # add minute column
-val_data$mod <- sample(seq(0,1439, by = 1), nrow(val_data), replace = TRUE)
+val_data$mod <- sample(seq(0,1380, by = 60), nrow(val_data), replace = TRUE)
 
 # expand grid of otm, doy and mod combinations
 otm_time_combs <- expand.grid(unique(val_data$a_otm_id), unique(val_data$doy),
@@ -217,7 +240,7 @@ val_data <- merge(val_data, p_otm_time_combs, by = c("otm_id", "doy", "mod", "kn
 
 ## Save data ------------------------------------------------------------------
 
-save(val_data, file = "data/val_data.RData")
+save(val_data, file = "data/val_data_2.RData")
 
 ## Validation summaries ------------------------------------------------------
 
@@ -234,6 +257,16 @@ x <- val_data %>%
 
 write.csv(x, file = "x.csv", row.names = FALSE)
 
+
+x %>%
+  ggplot(aes(x = as.factor(n_flights), y = abs_mean_error,
+             col = as.factor(n_otms))) +
+  geom_point() +
+  facet_wrap(~knot_p)
+
+x %>%
+  ggplot(aes(x = as.factor(n_flights), y = mean_error, col = as.factor(n_otms))) +
+  stat_summary(aes(group = n_otms))
 
 
 

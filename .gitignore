@@ -4,7 +4,5 @@
 .RData
 .Ruserdata
 .gitignore
-/case_flights
-/gcp_flights
-/no_gcp_flights
+/flights_data
 /sandbox

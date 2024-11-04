@@ -17,7 +17,7 @@ library(metR)
 
 ## Figure 3 --------------------------------------------------------------------
 
-# the `elevation`, `otms_metadata`, `matches_5`, `matches_20` data sets of the
+# the `elevation`, `otms_metadata`, `matches_5`, `matches_100` data sets of the
 # `throne` package are necessary for this figure.
 
 # panel A left ----
@@ -48,7 +48,7 @@ fig_3_panel_A_left <- matches_5 %>%
 
 ## panel A right ----
 
-fig_3_panel_A_right <- matches_20 %>%
+fig_3_panel_A_right <- matches_100 %>%
   group_by(otm_id) %>%
   mutate(times = n()) %>%
   ungroup() %>%
@@ -100,11 +100,11 @@ fig_3_panel_B_left <- matches_5_metadata %>%
 # panel B right ----
 
 # merge matches with otm metadata
-matches_20_metadata <- merge(matches_20, otms_metadata, by = c("otm_id"))
+matches_100_metadata <- merge(matches_100, otms_metadata, by = c("otm_id"))
 
 # plot
 fig_3_panel_B_right <- ggplot() +
-  geom_tile(data = matches_20_metadata,
+  geom_tile(data = matches_100_metadata,
             aes(x = longitude.x, y = latitude.x, fill = orientation)) +
   geom_contour(data = elevation, aes(x = longitude, y = latitude, z = elevation),
                col = "white", alpha = 0.5, linewidth = 0.5, bins = 20) +
