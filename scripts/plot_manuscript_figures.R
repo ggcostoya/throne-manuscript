@@ -9,6 +9,7 @@ library(gridExtra)
 library(tidyverse)
 library(viridis)
 library(metR)
+library(ggpubr)
 
 ## Figure 1 --------------------------------------------------------------------
 
@@ -22,33 +23,40 @@ library(metR)
 
 # panel A left ----
 
-fig_3_panel_A_left <- matches_5 %>%
+# get total number of tiles with assigned OTMs
+tile_n <- matches_5 %>%
+  filter(!is.na(otm_id)) %>%
+  group_by(otm_id) %>%
+  nrow()
+
+fig_3_A_left <- matches_5 %>%
   filter(!is.na(otm_id)) %>%
   group_by(otm_id) %>%
   summarise(times = n()) %>%
   ungroup() %>%
   arrange(desc(times)) %>%
   mutate(cum_times = cumsum(times)) %>%
+  mutate(otm_id = str_sub(otm_id, -2)) %>%
   ggplot(aes(x = fct_reorder(otm_id, cum_times))) +
   geom_hline(yintercept = c(50,75,90,95), col = "gray", linetype = 2) +
   geom_hline(yintercept = 100, col = "gray", linetype = 1) +
-  geom_line(aes(y =  100* (cum_times/5609)), group = 1) +
-  geom_point(aes(y = 100 * (cum_times/5609))) +
-  geom_col(aes(y = 100 * (times/5609), fill = 100 * (times/5609)),
+  geom_line(aes(y =  100* (cum_times/tile_n)), group = 1) +
+  geom_point(aes(y = 100 * (cum_times/tile_n))) +
+  geom_col(aes(y = 100 * (times/tile_n), fill = 100 * (times/tile_n)),
            col = "black") +
   ylab("Thermal variability of the site described (%)") +
+  xlab("OTM ID") +
   scale_y_continuous(limits = c(0,102), expand = c(0,0), breaks = c(0,50,75,90,95,100)) +
   scale_fill_viridis() +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 90),
-        axis.title.x = element_blank(),
         legend.position = "none",
         plot.title = element_text(size = 15)) +
   ggtitle("A")
 
 ## panel A right ----
 
-fig_3_panel_A_right <- matches_100 %>%
+fig_3_A_right <- matches_100 %>%
   group_by(otm_id) %>%
   mutate(times = n()) %>%
   ungroup() %>%
@@ -75,7 +83,7 @@ orientation_colors <- c("N" = "darkblue", "NW" = "#7F468B","W" = "darkorange",
 matches_5_metadata <- merge(matches_5, otms_metadata, by = c("otm_id"))
 
 # plot
-fig_3_panel_B_left <- matches_5_metadata %>%
+fig_3_B_left <- matches_5_metadata %>%
   filter(!is.na(otm_id)) %>%
   group_by(orientation) %>%
   summarise(times = n()) %>%
@@ -85,9 +93,9 @@ fig_3_panel_B_left <- matches_5_metadata %>%
   ggplot(aes(x = fct_reorder(orientation, cum_times))) +
   geom_hline(yintercept = c(50,75,90,95), col = "gray", linetype = 2) +
   geom_hline(yintercept = 100, col = "gray", linetype = 1) +
-  geom_line(aes(y =  100* (cum_times/5609)), group = 1) +
-  geom_point(aes(y = 100 * (cum_times/5609))) +
-  geom_col(aes(y = 100 * (times/5609), fill = orientation), col = "black") +
+  geom_line(aes(y =  100* (cum_times/tile_n)), group = 1) +
+  geom_point(aes(y = 100 * (cum_times/tile_n))) +
+  geom_col(aes(y = 100 * (times/tile_n), fill = orientation), col = "black") +
   ylab("Thermal variability of the site described (%)") +
   xlab("OTM orientation") +
   scale_y_continuous(limits = c(0,102), expand = c(0,0), breaks = c(0,50,75,90,95,100)) +
@@ -103,7 +111,7 @@ fig_3_panel_B_left <- matches_5_metadata %>%
 matches_100_metadata <- merge(matches_100, otms_metadata, by = c("otm_id"))
 
 # plot
-fig_3_panel_B_right <- ggplot() +
+fig_3_B_right <- ggplot() +
   geom_tile(data = matches_100_metadata,
             aes(x = longitude.x, y = latitude.x, fill = orientation)) +
   geom_contour(data = elevation, aes(x = longitude, y = latitude, z = elevation),
@@ -125,10 +133,8 @@ fig_3_panel_B_right <- ggplot() +
 
 ## combine panels ----
 
-grid.arrange(fig_3_panel_A_left, fig_3_panel_A_right,
-             fig_3_panel_B_left, fig_3_panel_B_right, ncol = 2, nrow = 2)
-
-
+grid.arrange(fig_3_A_left, fig_3_A_right,fig_3_B_left, fig_3_B_right,
+             ncol = 2, nrow = 2)
 
 
 ## Figure S3 -------------------------------------------------------------------
@@ -263,7 +269,7 @@ fig_s5_left <- matches_5_metadata %>%
         plot.title = element_text(size = 15))
 
 ## right panel ----
-fig_s5_right <- matches_20_metadata %>%
+fig_s5_right <- matches_100_metadata %>%
   ggplot() +
   geom_tile(aes(x = longitude.x, y = latitude.x, fill = microhabitat)) +
   geom_contour(data = elevation, aes(x = longitude, y = latitude, z = elevation),
@@ -280,7 +286,7 @@ fig_s5_right <- matches_20_metadata %>%
 grid.arrange(fig_s5_left, fig_s5_right, ncol = 2)
 
 
-## Figure S5 ------------------------------------------------------------------
+## Figure S6 ------------------------------------------------------------------
 
 # predict the thermal landscape
 prediction_237 <- predict_thermal_landscape(matches = matches_20,
@@ -305,11 +311,11 @@ prediction_237 %>%
 load("data/val_data.RData")
 
 # all-day vs only day-time color
-ridge_color <- "royalblue" # for figure S5
-#ridge_color <- "darkorange" # for figure S6
+#ridge_color <- "royalblue" # for figure S5
+ridge_color <- "darkorange" # for figure S6
 
 fig_s5 <- val_data %>%
-  #filter(mod > 7*60) %>% filter(mod < 20*60) %>% # for day-time only (figure S7)
+  filter(mod > 7*60) %>% filter(mod < 20*60) %>% # for day-time only (figure S7)
   mutate(mod = round(mod/96)) %>% # rounding every 15 minutes
   group_by(n_flights, n_otms, knot_p, mod) %>%
   summarise(obs_op_temp = mean(obs_op_temp), pred_op_temp = mean(pred_op_temp)) %>%
@@ -317,7 +323,7 @@ fig_s5 <- val_data %>%
   mutate(knot_p = round(knot_p, digits = 3)) %>%
   ggplot(aes(x = pred_op_temp - obs_op_temp, y = as.factor(knot_p))) +
   geom_vline(xintercept = 0, linetype = 2) +
-  geom_density_ridges(alpha = 0.5, fill = ridge_color, col = NA, scale = 0.75) +
+  geom_density_ridges(alpha = 0.5, fill = ridge_color, col = NA, scale = 0.7) +
   stat_summary(fun.data = mean_sdl, size = 0.25) +
   facet_grid(cols = vars(n_flights), rows = vars(n_otms)) +
   xlab("Prediction Error (°C)") +
@@ -362,5 +368,212 @@ val_data %>%
         axis.title.x.top = element_text(margin = margin(t = 0,r = 0, b= 10, l = 0))) +
   labs(colour = "Knots / Hour")
 
+## Figure S12 ------------------------------------------------------------------
+
+# prepare density data
+error <- matches_100$error
+density <- density(error, n = 2^12)
+
+# plot density
+figureS12_A <- ggplot(data.frame(x = density$x, y = density$y),
+       aes(x,y)) +
+  geom_segment(aes(xend = x, yend = 0, col = x)) +
+  geom_line() +
+  scale_color_gradient(low = "white", high = "darkred") +
+  scale_y_continuous(expand = c(0,0)) +
+  theme_classic() +
+  theme(
+    legend.position = "none"
+  ) +
+  xlab("Matching error (°C)") +
+  ylab("Density") +
+  ggtitle("A")
+
+# get chull data area
+chull_data <- otms_metadata %>%
+  select(latitude, longitude) %>%
+  unique()
+chull_rows <- chull(chull_data)
+chull_data <- chull_data[chull_rows,]
+
+# plot panel B
+figureS12_B <- ggplot() +
+  geom_raster(data = matches_100, aes(x= longitude, y = latitude, fill = error)) +
+  geom_polygon(data = chull_data, aes(x = longitude, y = latitude),
+               alpha = 0, col = "black") +
+  geom_point(data = otms_metadata %>% select(latitude, longitude) %>% unique(),
+             aes(x = longitude, y = latitude)) +
+  scale_fill_gradient(low = "white", high = "darkred") +
+  theme_void() +
+  theme(legend.position = c(0.25, 0.85)) +
+  guides(fill = guide_colorbar(title = "Matching Error (°C)")) +
+  ggtitle("B")
+
+ggarrange(figureS12_A, figureS12_B, ncol = 2, nrow = 1, widths = c(1, 1))
+
+## Optional Figure 1 ----
+
+opt1_A <- matches_validation %>%
+  filter(!is.na(otm_id)) %>%
+  group_by(otm_id) %>%
+  summarise(times = n()) %>%
+  ungroup() %>%
+  arrange(desc(times)) %>%
+  mutate(cum_times = cumsum(times)) %>%
+  mutate(otm_id = str_sub(otm_id, -2)) %>%
+  ggplot(aes(x = fct_reorder(otm_id, cum_times))) +
+  geom_hline(yintercept = c(50,75,90,95), col = "gray", linetype = 2) +
+  geom_hline(yintercept = 100, col = "gray", linetype = 1) +
+  geom_line(aes(y =  100* (cum_times/nrow(matches_validation))),
+            group = 1, linewidth = 1.2) +
+  geom_col(aes(y = 100 * (times/nrow(matches_validation)),
+               fill = 100 * (times/nrow(matches_validation))),
+           col = "black", linewidth = 0.1) +
+  ylab("Thermal variability of the site described (%)") +
+  xlab("OTM ID") +
+  scale_y_continuous(limits = c(0,102), expand = c(0,0), breaks = c(0,50,75,90,95,100)) +
+  scale_fill_viridis() +
+  theme_classic() +
+  theme(axis.text.x = element_blank(),
+        legend.position = "none",
+        plot.title = element_text(size = 15),
+        axis.ticks.x = element_blank()) +
+  ggtitle("A")
+
+opt1_B <- matches_validation %>%
+  group_by(otm_id) %>%
+  mutate(times = n()) %>%
+  ungroup() %>%
+  ggplot() +
+  geom_tile(aes(x = longitude, y = latitude,
+                fill = 100 * (times/nrow(matches_validation)))) +
+  scale_fill_viridis() +
+  theme_void() +
+  theme(#legend.position = c(0.2, 0.85),
+        #legend.key.size = unit(0.5, "cm"),
+        plot.title = element_text(size = 15)) +
+  labs(fill = "Area described (%)") +
+  ggtitle("B")
+
+grid.arrange(opt1_A, opt1_B, ncol = 2, nrow = 1)
+
+
+## Optional Figure 2 -----------------------------------------------------------
+
+# read metadata file
+otms_metadata_validation <- read.csv("data/otm_metadata_validation.csv")
+
+# process metadata
+otms_metadata_validation <- otms_metadata_validation %>%
+  mutate(otm_id = str_sub(otm_id, 1, -3)) %>%
+  unique() %>%
+  select(otm_id, microhabitat)
+
+# merge matches with otm metadata
+matches_validation_metadata <- merge(matches_validation,
+                                     otms_metadata_validation, by = c("otm_id"))
+
+# panel A
+opt2_A <- matches_validation_metadata %>%
+  filter(!is.na(otm_id)) %>%
+  group_by(microhabitat) %>%
+  summarise(times = n()) %>%
+  ungroup() %>%
+  arrange(desc(times)) %>%
+  mutate(cum_times = cumsum(times)) %>%
+  ggplot(aes(x = fct_reorder(microhabitat, cum_times))) +
+  geom_hline(yintercept = c(50,75,90,95), col = "gray", linetype = 2) +
+  geom_hline(yintercept = 100, col = "gray", linetype = 1) +
+  geom_line(aes(y =  100* (cum_times/nrow(matches_validation))), group = 1) +
+  geom_point(aes(y = 100 * (cum_times/nrow(matches_validation)))) +
+  geom_col(aes(y = 100 * (times/nrow(matches_validation)), fill = microhabitat), col = "black") +
+  ylab("Thermal variability of the site described (%)") +
+  xlab("OTM microhabitat") +
+  scale_y_continuous(limits = c(0,102), expand = c(0,0), breaks = c(0,50,75,90,95,100)) +
+  scale_fill_brewer(palette = "Set1") +
+  theme_classic() +
+  theme(legend.position = "none",
+        plot.title = element_text(size = 15)) +
+  ggtitle("A")
+
+# panel B
+opt2_B <- matches_validation_metadata %>%
+  ggplot(aes(x = longitude, y = latitude, fill = microhabitat)) +
+  geom_tile() +
+  scale_fill_brewer(palette = "Set1") +
+  #scale_fill_viridis(discrete = T) +
+  theme_void() +
+  ggtitle("B")
+
+# plot
+grid.arrange(opt2_A, opt2_B, ncol = 2, nrow = 1)
+
+
+
+
+
+
+## Optional Figure 3 -----------------------------------------------------------
+
+# prepare density data
+error <- matches_validation$error
+density <- density(error, n = 2^12)
+
+# plot density
+opt3_A <- ggplot(data.frame(x = density$x, y = density$y),
+                      aes(x,y)) +
+  geom_segment(aes(xend = x, yend = 0, col = x)) +
+  geom_line() +
+  scale_color_gradient(low = "white", high = "darkred") +
+  scale_y_continuous(expand = c(0,0)) +
+  theme_classic() +
+  theme(
+    legend.position = "none"
+  ) +
+  xlab("Matching error (°C)") +
+  ylab("Density") +
+  ggtitle("A")
+
+# plot panel B
+opt3_B <- ggplot() +
+  geom_raster(data = matches_validation,
+              aes(x= longitude, y = latitude, fill = error)) +
+  scale_fill_gradient(low = "white", high = "darkred") +
+  theme_void() +
+  guides(fill = guide_colorbar(title = "Matching Error (°C)")) +
+  ggtitle("B")
+
+ggarrange(opt3_A, opt3_B, ncol = 2, nrow = 1, widths = c(1, 1))
+
+
+## Optional Figure 4 -----------------------------------------------------------
+
+# predict thermal landscapes
+pred <- predict_thermal_landscape(matches = matches_validation,
+                                  otm_splines = otms_splines_validation,
+                                  doy = c(107, 147, 187, 227),
+                                  mod = c(0,8*60,12*60,17*60,19*60))
+
+# plot thermal landscape prediction
+opt4 <- pred %>%
+  ggplot(aes(x = longitude, y = latitude, fill = pred_op_temp)) +
+  geom_raster() +
+  scale_fill_viridis(option = "magma") +
+  theme_classic() +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    axis.line = element_blank(),
+    axis.ticks = element_blank(),
+    panel.border = element_rect(fill = NA),
+    strip.background = element_blank(),
+    strip.text = element_text(size = 12),
+    panel.spacing = unit(0, "lines"),
+    legend.position = "bottom"
+  ) +
+  facet_grid(cols = vars(mod/60), rows = vars(doy)) +
+  guides(fill = guide_colorbar(title = "Predicted operative temperature (°C)"))
+
+grid.arrange(opt4, top = "Hour of the day", right = "Day of the year")
 
 
