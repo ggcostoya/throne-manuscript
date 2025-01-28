@@ -362,8 +362,8 @@ checking the accompanying <code>R</code> package <code>throne</code> at:
 <a href="https://github.com/ggcostoya/throne" class="uri">https://github.com/ggcostoya/throne</a>.</p>
 <p>The structure of the repository is as follows:</p>
 <ul>
-<li><p><code>data/</code>: Contains all data used for the manuscript
-including:</p>
+<li><code>data/</code>: Contains all data used for the manuscript
+including:
 <ul>
 <li><code>otm_data/</code>: Which contains 37 <code>.csv</code> files
 containing raw operative temperature model data collected in the field
@@ -375,11 +375,18 @@ this study.</li>
 <li><code>val_data.RData</code>: The validation data used in the
 manuscript.</li>
 </ul></li>
-<li><p><code>scripts/</code>: Contains all scripts used for the
-manuscript including:</p></li>
-<li><p><code>figures/</code>: Contains all figures generated for the
-manuscript in .PDF format</p></li>
+<li><code>scripts/</code>: Contains all scripts used for the manuscript
+including:
+<ul>
+<li><code>throne_method_validation.R</code>: The script used to validate
+the <code>throne</code> methodology.</li>
+<li><code>prep_data_for_package.R</code>: The script used to prepare the
+data for the <code>throne</code> package.</li>
+<li><code>plot_manuscript_figures.R</code>: The script used to generate
+all figures for the manuscript.</li>
+</ul></li>
 </ul>
+<p>The raw data for all flights conducted can be found at:</p>
 </div>
 
 
